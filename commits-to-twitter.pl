@@ -137,6 +137,7 @@ sub make_tweet {
     my $change = change_for($commit);
 
     my $message = "$by $change: " . $commit->{'Log message'};
+    $message =~ s/\s+/ /gms;
 
     return shorten($message), \%params;
 }
