@@ -121,9 +121,12 @@ sub change_for {
 
     my $match = shift @dirs;
     $match //= '';
+
+    my $last = '/';
     foreach my $dir (@dirs) {
-        chop $match while $dir !~ /^\Q$match/;
+        $last = chop $match while $dir !~ /^\Q$match/;
     }
+    $match .= '*' unless not $match or $last eq '/' or $match =~ s{/$}{};
 
     $match =~ s{^[\.\/]+}{};    # No need for leading ./
     $match =~ s{/+$}{};         # one less char most likely
