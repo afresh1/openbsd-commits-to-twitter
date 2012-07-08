@@ -87,14 +87,12 @@ sub change_for {
     my ($commit) = @_;
     my %changes;
     my @dirs;
-    my @files;
 
     foreach my $key ( keys %{$commit} ) {
         if ( $key =~ /^(\w+)\s+files$/ ) {
             $changes{ lc $1 }++;
             foreach my $dir ( keys %{ $commit->{$key} } ) {
-                push @dirs,  $dir;
-                push @files, @{ $commit->{$key}->{$dir} };
+                push @dirs, map {"$dir/$_"} @{ $commit->{$key}->{$dir} };
             }
         }
     }
@@ -103,22 +101,12 @@ sub change_for {
     @dirs = sort { length $a <=> length $b } @dirs;
 
     my $match = shift @dirs;
-
-    unless (@dirs) {
-        my $base = $match;
-        if ( $base eq '.' ) { $base = '' }
-        else                { $base .= '/' }
-
-        @dirs = sort { length $a <=> length $b }
-            map { $base . $_ } @files;
-        $match = shift @dirs;
-    }
-
     foreach my $dir (@dirs) {
         chop $match while $dir !~ /^\Q$match/;
     }
 
-    $match =~ s{/+$}{};    # one less char most likely
+    $match =~ s{^[\.\/]+}{};    # No need for leading ./
+    $match =~ s{/+$}{};         # one less char most likely
     $match ||= 'many things';
 
     my @changes = keys %changes;
