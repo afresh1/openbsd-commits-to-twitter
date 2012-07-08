@@ -118,6 +118,7 @@ sub change_for {
 
     # Put them shortest first
     @dirs = sort { length $a <=> length $b } @dirs;
+    my $num_changed = @dirs;
 
     my $match = shift @dirs;
     $match //= '';
@@ -133,8 +134,13 @@ sub change_for {
 
     my $message = $changed;
     if ( !$match ) {
-        $message .= ' many things'      if $has_non_regress;
-        $message .= ' including'        if $has_regress and $has_non_regress;
+        if ($has_non_regress) {
+            if    ( $num_changed > 5 ) { $message .= ' many things' }
+            elsif ( $num_changed > 2 ) { $message .= ' a few things' }
+            elsif ( $num_changed > 1 ) { $message .= ' a couple things' }
+            else                       { $message .= ' something' }
+        }
+        $message .= ' including' if $has_regress and $has_non_regress;
         $message .= ' regression tests' if $has_regress;
     }
     elsif ($has_regress) {
