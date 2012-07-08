@@ -88,31 +88,65 @@ sub change_for {
     my %changes;
     my @dirs;
 
+    my $has_regress     = 0;
+    my $has_non_regress = 0;
     foreach my $key ( keys %{$commit} ) {
         if ( $key =~ /^(\w+)\s+files$/ ) {
             $changes{ lc $1 }++;
-            foreach my $dir ( keys %{ $commit->{$key} } ) {
-                push @dirs, map {"$dir/$_"} @{ $commit->{$key}->{$dir} };
+            foreach ( keys %{ $commit->{$key} } ) {
+                my $dir = $_;
+                my @files = @{ $commit->{$key}->{$dir} || [] };
+                @files = '' unless @files;
+
+                if   ( $dir =~ s{^regress/}{} ) { $has_regress++ }
+                else                            { $has_non_regress++ }
+
+                push @dirs, map {"$dir/$_"} @files;
             }
         }
+    }
+
+    my @changes = keys %changes;
+    my $changed = @changes == 1 ? $changes[0] : 'changed';
+
+    unless (@dirs) {
+        if (@changes) {
+            return "$changed something";
+        }
+        return "did something the parser didn't understand";
     }
 
     # Put them shortest first
     @dirs = sort { length $a <=> length $b } @dirs;
 
     my $match = shift @dirs;
+    $match //= '';
     foreach my $dir (@dirs) {
         chop $match while $dir !~ /^\Q$match/;
     }
 
     $match =~ s{^[\.\/]+}{};    # No need for leading ./
     $match =~ s{/+$}{};         # one less char most likely
-    $match ||= 'many things';
 
-    my @changes = keys %changes;
-    my $change = @changes == 1 ? $changes[0] : 'changed';
+    my $message = $changed;
+    if ( !$match ) {
+        $message .= ' many things'      if $has_non_regress;
+        $message .= ' including'        if $has_regress and $has_non_regress;
+        $message .= ' regression tests' if $has_regress;
+    }
+    elsif ($has_regress) {
+        if ($has_non_regress) {
+            $message .= " $match and regression tests";
+        }
+        else {
+            $message .= " regress/$match";
+        }
+    }
+    else {
+        $message .= " $match";
+    }
 
-    return "$change $match";
+    return $message;
 }
 
 sub make_tweet {
