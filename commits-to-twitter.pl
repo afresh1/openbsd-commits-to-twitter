@@ -177,6 +177,11 @@ sub parse_commit {
         }
         return unless $commit{CVSROOT};    # first thing should be CVSROOT
 
+        if (/^(Update of)\s+(.*)\/([^\/]+)$/) {
+            $commit{'Updated files'}{$2} = [$3];
+            next;
+        }
+
         if (/^(\w+ files|Log message):/) {
             $key = $1;
             next;
