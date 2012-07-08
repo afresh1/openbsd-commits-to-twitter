@@ -182,31 +182,26 @@ sub parse_commit {
             next;
         }
 
-        if (/^(\w+ files|Log message):/) {
+        if (/^(\w+ files):/) {
             $key = $1;
             next;
         }
 
         if ($key) {
-            if ( $key eq 'Log message' ) {
-                $commit{$key} = $_;
-                $commit{$key} .= $_ while <$fh>;
-            }
-            else {
-                chomp;
-                s/^\s+//;
-                unless ($_) {
-                    $key = '';
-                    next;
-                }
+            chomp;
+            s/^\s+//;
+            unless ($_) { $key = ''; next; }
 
-                my (@files) = split /\s*:\s+/;
-                $dir = shift @files if @files > 1;
-                @files = map {split} @files;
-                next unless $dir;
+            my (@files) = split /\s*:\s+/;
+            $dir = shift @files if @files > 1;
+            @files = map {split} @files;
+            next unless $dir;
 
-                push @{ $commit{$key}{$dir} }, @files;
-            }
+            push @{ $commit{$key}{$dir} }, @files;
+        }
+
+        if (/^Log [Mm]essage:/) {
+            $commit{'Log message'} .= $_ while <$fh>;
         }
     }
     close $fh;
