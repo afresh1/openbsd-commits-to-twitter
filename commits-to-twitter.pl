@@ -214,11 +214,15 @@ sub parse_commit {
             next;
         }
 
-        if (/(CVSROOT|Module name|Changes by):\s+(.*)$/) {
+        if (/(CVSROOT|Module name|Changes by|Release Tags):\s+(.*)$/) {
             $commit{$1} = $2;
             next;
         }
         return unless $commit{CVSROOT};    # first thing should be CVSROOT
+
+        if (/^\s*N\s+(.*)\/([^\/]+)/) {
+            push @{ $commit{'Imported files'}{$1} }, $2;
+        }
 
         if (/^(Update of)\s+(.*)\/([^\/]+)$/) {
             $commit{'Updated files'}{$2} = [$3];
@@ -241,10 +245,19 @@ sub parse_commit {
             next unless $dir;
 
             push @{ $commit{$key}{$dir} }, @files;
+            next;
         }
 
         if (/^Log [Mm]essage:/) {
-            $commit{'Log message'} .= $_ while <$fh>;
+            while (<$fh>) {
+                if (/^\s*Vendor Tag:\s+(.*)$/) {
+                    $commit{'Vendor Tag'} = $1;
+                    $commit{'Log message'} =~ s/\s*Status:\s*$//ms;
+                    last;
+                }
+                $commit{'Log message'} .= $_;
+            }
+            next;
         }
     }
     close $fh;
