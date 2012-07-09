@@ -1,0 +1,20 @@
+CVS: 
+  background: 8A2BE2
+  text: BFE22B
+  links: 45E22B
+src:
+  background: 8B0000
+  text: 008B00
+  links: 00008B
+ports:
+  background: 1E90FF
+  text: FF421F
+  links: FFD91F
+www:
+  background: 32CD32
+  text: 9933CD
+  links: CD3399
+xenocara:
+  background: DAA520
+  text: 2194DA
+  links: 2921DA
