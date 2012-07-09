@@ -214,7 +214,7 @@ sub parse_commit {
             next;
         }
 
-        if (/(CVSROOT|Module name|Changes by|Release Tags):\s+(.*)$/) {
+        if (/^\s*(CVSROOT|Module name|Changes by|Release Tags):\s+(.*)$/) {
             $commit{$1} = $2;
             next;
         }
