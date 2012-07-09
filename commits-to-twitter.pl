@@ -47,6 +47,8 @@ my @dirs = (
 );
 
 find( sub { check_message($_) }, @dirs );
+sleep 10;
+retweet();
 
 my $watcher
     = File::ChangeNotify->instantiate_watcher( directories => \@dirs, );
@@ -55,6 +57,8 @@ while ( my @events = $watcher->wait_for_events() ) {
         next unless $event->type eq 'create';
         check_message( $event->path );
     }
+    sleep 10;
+    retweet();
 }
 
 sub check_message {
@@ -70,10 +74,6 @@ sub check_message {
     my ( $message, $params ) = make_tweet($commit);
     tweet( $message, $params );
 
-    if ( $params->{who} ne 'openbsd_cvs' ) {
-        tweet( shorten( $commit->{'Module name'} . ': ' . $message ),
-            { %{$params}, who => 'openbsd_cvs' } );
-    }
     $seen->{ $commit->{id} } = time;
     sync_seen();
 }
@@ -193,6 +193,25 @@ sub tweet {
         return 0;
     }
     return 1;
+}
+
+sub retweet {
+
+    my $opts = { count => 100, trim_user => 1 };
+    my $since_id = seen()->{openbsd_cvs_last_retweet} || 0;
+    $opts->{since_id} = $since_id if $since_id;
+
+    my $nt     = get_twitter_account('openbsd_cvs');
+    my $tokens = get_access_tokens('openbsd_cvs');
+    my $tweets = $nt->home_timeline($opts);
+
+    foreach my $tweet ( reverse @{$tweets} ) {
+        next if $tweet->{user}->{id_str} == $tokens->{user_id};
+        next if $tweet->{retweeted};
+        $nt->retweet( $tweet->{id_str} );
+        seen()->{openbsd_cvs_last_retweet} = $tweet->{id_str};
+    }
+    sync_seen();
 }
 
 sub parse_commit {
