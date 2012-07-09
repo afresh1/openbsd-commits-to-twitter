@@ -59,7 +59,7 @@ while ( my @events = $watcher->wait_for_events() ) {
 
 sub check_message {
     my ($file) = @_;
-    state $seen = load_seen();
+    my $seen = seen();
 
     my $commit = parse_commit($file);
     return unless $commit;
@@ -275,9 +275,13 @@ sub parse_commit {
 
 {
     my $X;
+    my %seen;
 
-    sub load_seen {
-        $X = tie my %seen, 'DB_File', $seen_file or die;
+    sub seen {
+        return \%seen if %seen;
+
+        $X = tie %seen, 'DB_File', $seen_file or die;
+
         return \%seen;
     }
 
