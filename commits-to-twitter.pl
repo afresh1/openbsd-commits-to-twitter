@@ -76,7 +76,7 @@ sub check_message {
     return if $seen->{ $commit->{id} };
 
     my ( $message, $params ) = make_tweet($commit);
-    tweet( $message, $params );
+    tweet( $message, $params ) or die "Unable to send tweet\n";
 
     $seen->{ $commit->{id} } = time;
     sync_seen();
