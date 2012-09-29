@@ -46,9 +46,13 @@ my @dirs = (
     'Maildir/.lists.openbsd.ports-changes/',
 );
 
-find( sub { check_message($_) }, @dirs );
-sleep 10;
-retweet();
+{
+    my %files;
+    find( sub { return unless -f; $files{$File::Find::name} = -M _ }, @dirs );
+    check_message($_) for sort { $files{$b} <=> $files{$a} } keys %files;
+    sleep 10;
+    retweet();
+}
 
 my $watcher
     = File::ChangeNotify->instantiate_watcher( directories => \@dirs, );
