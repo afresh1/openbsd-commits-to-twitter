@@ -306,6 +306,7 @@ sub parse_commit {
         $commit{'Changes on'} = $when;
     }
 
+    $commit{'Log message'} //= '';
     $commit{'Log message'} =~ s/\s+$//ms;
 
     return \%commit;
