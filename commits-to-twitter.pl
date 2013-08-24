@@ -16,7 +16,8 @@
 ########################################################################
 use strict;
 use warnings;
-use 5.010;
+use 5.012;
+use Encode qw(encode decode);
 
 use DB_File;
 use File::Basename;
@@ -176,8 +177,9 @@ sub shorten {
 sub tweet {
     my ( $message, $params ) = @_;
 
-    say "Tweeting [$message]";
-    eval { get_twitter_account( $params->{who} )->update($message) };
+    say encode('UTF-8', "Tweeting [$message]");
+    my $encoded = encode('UTF-8', $message);
+    eval { get_twitter_account( $params->{who} )->update($encoded) };
     if ($@) {
 
         # If we have what Twitter thinks is a URL, they are going to
@@ -244,7 +246,8 @@ sub parse_changelog {
     open my $fh, '<', $file or die $!;
     my $key = '';
     my $dir = '';
-    while (<$fh>) {
+    while (1) {
+        $_ = decode('UTF-8', readline $fh) || last;
         chomp;
 
         if (/^\s*(CVSROOT|Module name|Changes by|Release Tags):\s+(.*)$/) {
