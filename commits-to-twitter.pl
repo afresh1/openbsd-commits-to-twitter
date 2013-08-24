@@ -116,7 +116,7 @@ sub change_for {
     foreach my $dir (@dirs) {
         $last = chop $match while $dir !~ /^\Q$match/;
     }
-    $match .= '*' unless not $match or $last eq '/' or $match =~ s{/$}{};
+    $match .= '*' if $match and $last ne '/' and $match !~ m{/$};
 
     $match =~ s{^[\.\/]+}{};    # No need for leading ./
     $match =~ s{/+$}{};         # one less char most likely
