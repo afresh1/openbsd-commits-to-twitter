@@ -1,0 +1,4 @@
+#!/bin/sh
+mkdir -p tmp
+rsync -a rsync://anoncvs.spacehopper.org/OpenBSD-CVS/CVSROOT/ChangeLog ./tmp
+`dirname $0`/commits-to-twitter.pl tmp/ChangeLog

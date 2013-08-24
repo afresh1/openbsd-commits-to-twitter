@@ -20,12 +20,13 @@ use 5.010;
 
 use DB_File;
 use File::Basename;
-use File::ChangeNotify;
-use File::Find;
 use Net::Twitter;
 
 my $seen_file = $ENV{HOME} . '/.tweeted_changes';
 my $auth_file = $ENV{HOME} . '/.auth_tokens';
+
+my ($changelog) = @ARGV;
+die "Usage: $0 <path/to/ChangeLog>\n" unless $changelog;
 
 my %accounts = (
     cvs      => 'openbsd_cvs',
@@ -41,42 +42,25 @@ foreach my $key ( sort keys %accounts ) {
     get_twitter_account($account);
 }
 
-my @dirs = (
-    'Maildir/.lists.openbsd.source-changes/',
-    'Maildir/.lists.openbsd.ports-changes/',
-);
-
-{
-    my %files;
-    find( sub { return unless -f; $files{$File::Find::name} = -M _ }, @dirs );
-    check_message($_) for sort { $files{$b} <=> $files{$a} } keys %files;
-    sleep 10;
-    retweet();
+my @commits = parse_changelog($changelog);
+foreach my $commit (@commits) {
+    check_message( $commit );
 }
-
-my $watcher
-    = File::ChangeNotify->instantiate_watcher( directories => \@dirs, );
-while ( my @events = $watcher->wait_for_events() ) {
-    foreach my $event (@events) {
-        next unless $event->type eq 'create';
-        check_message( $event->path );
-    }
-    sleep 10;
-    retweet();
-}
+sleep 10;
+retweet();
 
 sub check_message {
-    my ($file) = @_;
-    my $seen = seen();
+    my ($commit) = @_;
 
-    my $commit = parse_commit($file);
     return unless $commit;
     return unless $commit->{id};
 
+    my $seen = seen();
     return if $seen->{ $commit->{id} };
 
     my ( $message, $params ) = make_tweet($commit);
-    tweet( $message, $params ) or die "Unable to send tweet\n";
+
+    tweet( $message, $params ) or return; # try again
 
     $seen->{ $commit->{id} } = time;
     sync_seen();
@@ -233,33 +217,45 @@ sub retweet {
     sync_seen();
 }
 
-sub parse_commit {
+sub parse_changelog {
     my ($file) = @_;
     return {} unless -f $file;
 
+    my @commits;
     my %commit;
 
-    my $in = 'HEADER';
+    my $finish_commit = sub {
+        if ( my $changes = $commit{'Changes by'} ) {
+            my ( $who, $when ) = split /\s+/, $changes, 2;
+            $commit{'Changes by'} = $who;
+            $commit{'Changes on'} = $when;
+        }
+
+        $commit{'Log message'} //= '';
+        $commit{'Log message'} =~ s/^\s+|\s+$//gms;
+
+        $commit{id} = join '|', grep {defined}
+            @commit{ 'Module name', 'Changes by', 'Changes on' };
+
+        push @commits, {%commit};
+        %commit = ();
+    };
+
     open my $fh, '<', $file or die $!;
     my $key = '';
     my $dir = '';
     while (<$fh>) {
         chomp;
 
-        if ( $in eq 'HEADER' ) {
-            if (/^Message-ID:\s+(.+?)\s*$/i) { $commit{id} = $1 }
-            unless ($_) { $in = 'BODY' }
-            next;
-        }
-
         if (/^\s*(CVSROOT|Module name|Changes by|Release Tags):\s+(.*)$/) {
             $commit{$1} = $2;
             next;
         }
-        return unless $commit{CVSROOT};    # first thing should be CVSROOT
+        next unless $commit{CVSROOT};    # first thing should be CVSROOT
 
         if (/^\s*N\s+(.*)\/([^\/]+)/) {
             push @{ $commit{'Imported files'}{$1} }, $2;
+            next;
         }
 
         if (/^(Update of)\s+(.*)\/([^\/]+)$/) {
@@ -273,14 +269,25 @@ sub parse_commit {
         }
 
         if ($key) {
-            chomp;
             s/^\s+//;
-            unless ($_) { $key = ''; next; }
+            unless ($_) { $key = ''; $dir = ''; next; }
 
-            my (@files) = split /\s*:\s+/;
-            $dir = shift @files if @files > 1;
+            my @files;
+            if (/^\s*([^:]*?)\s*:\s*(.*)$/) {
+                $dir = $1;
+                @files = $2;
+            }
+            else { @files = $_ }
             @files = map {split} @files;
             next unless $dir;
+
+            if (@files && $files[0] eq 'Tag:') {
+                my $k = shift @files;
+                my $v = shift @files;
+
+                $k =~ s/:$//;
+                $commit{$k} = $v;
+            }
 
             push @{ $commit{$key}{$dir} }, @files;
             next;
@@ -288,28 +295,24 @@ sub parse_commit {
 
         if (/^Log [Mm]essage:/) {
             while (<$fh>) {
-                if (/^\s*Vendor Tag:\s+(.*)$/) {
-                    $commit{'Vendor Tag'} = $1;
+                if (my ($k, $v) = /^(CVSROOT):\s+(.*)$/) {
+                    $finish_commit->();
+                    $commit{$k} = $v;
+                    last
+                }
+                if (my ($k, $v) = /^\s*(Vendor Tag):\s+(.*)$/) {
+                    $commit{$k} = $v;
                     $commit{'Log message'} =~ s/\s*Status:\s*$//ms;
                     last;
                 }
                 $commit{'Log message'} .= $_;
             }
-            next;
         }
     }
     close $fh;
 
-    if ( my $changes = $commit{'Changes by'} ) {
-        my ( $who, $when ) = split /\s+/, $changes, 2;
-        $commit{'Changes by'} = $who;
-        $commit{'Changes on'} = $when;
-    }
-
-    $commit{'Log message'} //= '';
-    $commit{'Log message'} =~ s/\s+$//ms;
-
-    return \%commit;
+    $finish_commit->();
+    return @commits;
 }
 
 {
