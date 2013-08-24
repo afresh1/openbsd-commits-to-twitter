@@ -213,6 +213,7 @@ sub retweet {
     foreach my $tweet ( reverse @{$tweets} ) {
         next if $tweet->{user}->{id_str} == $tokens->{user_id};
         next if $tweet->{retweeted};
+        print "Retweet $tweet->{id_str}\n";
         $nt->retweet( $tweet->{id_str} );
         seen()->{openbsd_cvs_last_retweet} = $tweet->{id_str};
     }
