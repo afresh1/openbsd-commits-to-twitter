@@ -18,3 +18,7 @@ xenocara:
   background: DAA520
   text: 2194DA
   links: 2921DA
+stable:
+  background: CCCCCC
+  text: 000000
+  links: 666666
