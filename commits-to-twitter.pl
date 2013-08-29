@@ -35,6 +35,7 @@ my %accounts = (
     ports    => 'openbsd_ports',
     xenocara => 'openbsd_xenocar',
     www      => 'openbsd_www',
+    stable   => 'openbsd_stable',
 );
 
 # Login to twitter
@@ -57,13 +58,22 @@ sub check_message {
     return unless $commit->{id};
 
     my $seen = seen();
-    return if $seen->{ $commit->{id} };
 
     my ( $message, $params ) = make_tweet($commit);
 
-    tweet( $message, $params ) or return; # try again
+    if (!$seen->{ $commit->{id} }) {
+        if ( tweet( $message, $params ) ) {
+            $seen->{ $commit->{id} } = time;
+        }
+    }
 
-    $seen->{ $commit->{id} } = time;
+    if ($commit->{Tag} && !$seen->{ 'stable_' . $commit->{id} }) {
+        $params->{who} = account_for( 'stable' );
+        if ( tweet( $message, $params ) ) {
+            $seen->{ 'stable_' . $commit->{id} } = time;
+        }
+    }
+
     sync_seen();
 }
 
