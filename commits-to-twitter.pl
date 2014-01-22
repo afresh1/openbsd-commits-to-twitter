@@ -427,6 +427,7 @@ sub get_twitter_account {
 
     my $nt = Net::Twitter->new(
         traits => [qw/API::RESTv1_1 OAuth/],
+        ssl    => 1,
         %{$consumer_tokens}
     );
 
