@@ -304,33 +304,39 @@ sub parse_changelog {
         }
 
         if (/^Log [Mm]essage:/) {
-            my $importing = 0;
-            while (<$fh>) {
-                if (my ($k, $v) = /^(CVSROOT):\s+(.*)$/) {
-                    $finish_commit->();
-                    $commit{$k} = $v;
-                    last
-                }
-                if (my ($k, $v) = /^\s*(Vendor Tag|Release Tags):\s+(.*)$/) {
-                    $commit{$k} = $v;
-                    $commit{'Log message'} =~ s/\s*Status:\s*$//ms;
-                    $importing = 1;
-                    next;
-                }
-
-                if ($importing && m{^\s*[UCN]\s+[^/]*/(.*)/([^/]+)\b$}) {
-                    push @{ $commit{'Imported files'}{$1} }, $2;
-                    next;
-                }
-
-                $commit{'Log message'} .= $_;
-            }
+            my $cvsroot = parse_log_message( \%commit, $fh );
+            $finish_commit->();
+            $commit{CVSROOT} = $cvsroot;
         }
     }
     close $fh;
 
     $finish_commit->();
     return @commits;
+}
+
+sub parse_log_message {
+    my ( $commit, $fh ) = @_;
+
+    my $importing = 0;
+
+    while (<$fh>) {
+        if ( /^CVSROOT:\s+(.*)$/ ) {
+            return $1; # we've found the end of this message
+        }
+        elsif ( my ( $k, $v ) = /^\s*(Vendor Tag|Release Tags):\s+(.*)$/ ) {
+            $commit->{$k} = $v;
+            $commit->{'Log message'} =~ s/\s*Status:\s*$//ms;
+            $importing = 1;
+        }
+        elsif ( $importing && m{^\s*[UCN]\s+[^/]*/(.*)/([^/]+)\b$} ) {
+            push @{ $commit->{'Imported files'}{$1} }, $2;
+        }
+        else {
+            $commit->{'Log message'} .= $_;
+        }
+    }
+    return;
 }
 
 {
