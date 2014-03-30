@@ -262,16 +262,11 @@ sub parse_changelog {
         $_ = decode('UTF-8', readline $fh) || last;
         chomp;
 
-        if (/^\s*(CVSROOT|Module name|Changes by|Release Tags):\s+(.*)$/) {
+        if (/^\s*(CVSROOT|Module name|Changes by):\s+(.*)$/) {
             $commit{$1} = $2;
             next;
         }
         next unless $commit{CVSROOT};    # first thing should be CVSROOT
-
-        if (/^\s*N\s+(.*)\/([^\/]+)/) {
-            push @{ $commit{'Imported files'}{$1} }, $2;
-            next;
-        }
 
         if (/^(Update of)\s+(.*)\/([^\/]+)$/) {
             $commit{'Updated files'}{$2} = [$3];
@@ -309,17 +304,25 @@ sub parse_changelog {
         }
 
         if (/^Log [Mm]essage:/) {
+            my $importing = 0;
             while (<$fh>) {
                 if (my ($k, $v) = /^(CVSROOT):\s+(.*)$/) {
                     $finish_commit->();
                     $commit{$k} = $v;
                     last
                 }
-                if (my ($k, $v) = /^\s*(Vendor Tag):\s+(.*)$/) {
+                if (my ($k, $v) = /^\s*(Vendor Tag|Release Tags):\s+(.*)$/) {
                     $commit{$k} = $v;
                     $commit{'Log message'} =~ s/\s*Status:\s*$//ms;
-                    last;
+                    $importing = 1;
+                    next;
                 }
+
+                if ($importing && m{^\s*[UCN]\s+[^/]*/(.*)/([^/]+)\b$}) {
+                    push @{ $commit{'Imported files'}{$1} }, $2;
+                    next;
+                }
+
                 $commit{'Log message'} .= $_;
             }
         }
