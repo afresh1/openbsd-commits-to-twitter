@@ -168,7 +168,7 @@ sub make_tweet {
 
     my $message = "$by $change: " . $commit->{'Log message'};
     $message = $commit->{Tag} . ' ' . $message if $commit->{Tag};
-    $message =~ s/\s+/ /gms;
+    $message =~ s/[[:blank:]+]]/ /gms;
 
     return shorten($message), \%params;
 }
