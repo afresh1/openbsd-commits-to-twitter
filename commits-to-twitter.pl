@@ -418,13 +418,14 @@ sub parse_log_message {
     }
 
     sub save_access_tokens {
-        open my $fh;
+        die "Saving is disabled, make sure you really want to";
+        open my $fh, '>', $auth_file or die $!;
         foreach my $key ( sort keys %tokens ) {
             my @keys
                 = $key eq 'consumer'
                 ? qw( consumer_key consumer_secret )
                 : qw( access_token access_token_secret user_id screen_name );
-            say join "\t", $key, @{ $tokens{$key} }{@keys};
+            say $fh join "\t", $key, @{ $tokens{$key} }{@keys};
         }
         close $fh;
     }
