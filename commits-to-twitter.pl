@@ -22,9 +22,11 @@ use Encode qw(encode decode);
 use DB_File;
 use File::Basename;
 use Net::Twitter;
+use Net::FTP;
 
 my $seen_file = $ENV{HOME} . '/.tweeted_changes';
 my $auth_file = $ENV{HOME} . '/.auth_tokens';
+my $mirror    = 'openbsd.cs.toronto.edu';
 
 my ($changelog) = @ARGV;
 die "Usage: $0 <path/to/ChangeLog>\n" unless $changelog;
@@ -36,6 +38,8 @@ my %accounts = (
     xenocara => 'openbsd_xenocar',
     www      => 'openbsd_www',
     stable   => 'openbsd_stable',
+
+    sets    => 'openbsd_sets',
 );
 
 # Login to twitter
@@ -45,32 +49,33 @@ foreach my $key ( sort keys %accounts ) {
 }
 
 my @commits = parse_changelog($changelog);
-foreach my $commit (@commits) {
-    check_message( $commit );
+my @sets = parse_sets($mirror);
+foreach my $details (@commits, @sets) {
+    check_message( $details );
 }
 sleep 10;
 retweet();
 
 sub check_message {
-    my ($commit) = @_;
+    my ($details) = @_;
 
-    return unless $commit;
-    return unless $commit->{id};
+    return unless $details;
+    return unless $details->{id};
 
     my $seen = seen();
 
-    my ( $message, $params ) = make_tweet($commit);
+    my ( $message, $params ) = make_tweet($details);
 
-    if (!$seen->{ $commit->{id} }) {
+    if (!$seen->{ $details->{id} }) {
         if ( tweet( $message, $params ) ) {
-            $seen->{ $commit->{id} } = time;
+            $seen->{ $details->{id} } = time;
         }
     }
 
-    if ($commit->{Tag} && !$seen->{ 'stable_' . $commit->{id} }) {
+    if ($details->{Tag} && !$seen->{ 'stable_' . $details->{id} }) {
         $params->{who} = account_for( 'stable' );
-        if ( tweet( $message, $params ) ) {
-            $seen->{ 'stable_' . $commit->{id} } = time;
+        if ( tweet( $details, $params ) ) {
+            $seen->{ 'stable_' . $details->{id} } = time;
         }
     }
 
@@ -159,6 +164,8 @@ sub change_for {
 
 sub make_tweet {
     my ($commit) = @_;
+    return make_tweet_for_sets($commit) if $commit->{type};
+
     my %params = ( who => account_for( $commit->{'Module name'} ), );
 
     my $by = $commit->{'Changes by'};
@@ -170,6 +177,15 @@ sub make_tweet {
     $message = $commit->{Tag} . ' ' . $message if $commit->{Tag};
     $message =~ s/\s*\d+\s*conflicts created by this import.*//s;
     $message =~ s/[[:blank:]+]]/ /gms;
+
+    return shorten($message), \%params;
+}
+
+sub make_tweet_for_sets {
+    my ($set) = @_;
+    my %params = ( who => 'openbsd_sets' );
+
+    my $message = "New OpenBSD $set->{release} $set->{type} for $set->{arch}";
 
     return shorten($message), \%params;
 }
@@ -338,6 +354,45 @@ sub parse_log_message {
         }
     }
     return;
+}
+
+sub parse_sets {
+    my ($host) = @_;
+
+    my $ftp = Net::FTP->new( $host, Debug => 0 )
+        or die "Cannot connect to $host: $@";
+
+    $ftp->login( "anonymous", 'openbsd_sets@twitter' )
+        or die "Cannot login ", $ftp->message;
+
+    my $year = (gmtime)[5] + 1900;
+    my @sets;
+    for ( $ftp->dir('/pub/OpenBSD/*/{,packages/}*/index.txt') ) {
+        my ( $perm, $links, $u, $g, $size, $mon, $day, $time, $file ) = split;
+        my ( $release, $arch, $pkg_arch ) = ( split qr{/}, $file )[ 3, 4, 5 ];
+
+        next if $arch eq 'tools';
+
+        my $type = 'sets';
+        if ( $arch eq 'packages' ) {
+            $type = $arch;
+            $arch = $pkg_arch;
+        }
+
+        $release = 'snapshot' if $release eq 'snapshots';
+
+        push @sets, {
+            id      => "$type-$arch-$year-$mon-$day-$time",
+            type    => $type,
+            release => $release,
+            arch    => $arch,
+            month   => $mon,
+            day     => $day,
+            time    => $time,
+        };
+    }
+
+    return @sets;
 }
 
 {
