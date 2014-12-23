@@ -22,3 +22,7 @@ stable:
   background: CCCCCC
   text: 000000
   links: 666666
+sets:
+  background: FFFF00
+  text: CD0744
+  links: 3414AF
