@@ -365,10 +365,9 @@ sub parse_sets {
     $ftp->login( "anonymous", 'openbsd_sets@twitter' )
         or die "Cannot login ", $ftp->message;
 
-    my $year = (gmtime)[5] + 1900;
     my @sets;
     for ( $ftp->dir('/pub/OpenBSD/*/{,packages/}*/index.txt') ) {
-        my ( $perm, $links, $u, $g, $size, $mon, $day, $time, $file ) = split;
+        my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $file ) = split;
         my ( $release, $arch, $pkg_arch ) = ( split qr{/}, $file )[ 3, 4, 5 ];
 
         next if $arch eq 'tools';
@@ -381,14 +380,14 @@ sub parse_sets {
 
         $release = 'snapshot' if $release eq 'snapshots';
 
+        my $id = "$type-$release-$arch-$mon-$day";
+        $id .= "-$yort" if $release eq 'snapshot'; # yort: YearOrTime
+
         push @sets, {
-            id      => "$type-$arch-$year-$mon-$day-$time",
+            id      => $id,
             type    => $type,
             release => $release,
             arch    => $arch,
-            month   => $mon,
-            day     => $day,
-            time    => $time,
         };
     }
 
