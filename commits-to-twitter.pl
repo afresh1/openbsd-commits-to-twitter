@@ -74,7 +74,7 @@ sub check_message {
 
     if ($details->{Tag} && !$seen->{ 'stable_' . $details->{id} }) {
         $params->{who} = account_for( 'stable' );
-        if ( tweet( $details, $params ) ) {
+        if ( tweet( $message, $params ) ) {
             $seen->{ 'stable_' . $details->{id} } = time;
         }
     }
