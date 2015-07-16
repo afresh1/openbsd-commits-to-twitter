@@ -366,16 +366,19 @@ sub parse_sets {
         or die "Cannot login ", $ftp->message;
 
     my @sets;
-    for ( $ftp->dir('/pub/OpenBSD/*/{,packages/}*/index.txt') ) {
+    for ( $ftp->dir('/pub/OpenBSD/*/{*/*base*.tgz,packages/*/index.txt}') ) {
         my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $file ) = split;
-        my ( $release, $arch, $pkg_arch ) = ( split qr{/}, $file )[ 3, 4, 5 ];
+        my ( $release, $arch, $extra ) = ( split qr{/}, $file )[ 3, 4, 5 ];
 
         next if $arch eq 'tools';
 
         my $type = 'sets';
         if ( $arch eq 'packages' ) {
             $type = $arch;
-            $arch = $pkg_arch;
+            $arch = $extra;
+        }
+        elsif ($extra =~ /^xbase/){
+            $type = 'X-sets';
         }
 
         $release = 'snapshot' if $release eq 'snapshots';
