@@ -263,7 +263,8 @@ sub parse_changelog {
         }
 
         $commit{'Log message'} //= '';
-        $commit{'Log message'} =~ s/^\s+|\s+$//gms;
+        $commit{'Log message'} =~ s/^\s+//gm;
+        $commit{'Log message'} =~ s/\s+$//gm;
 
         $commit{id} = join '|', grep {defined}
             @commit{ 'Module name', 'Changes by', 'Changes on' };
