@@ -23,6 +23,7 @@ use DB_File;
 use File::Basename;
 use Net::Twitter;
 use Net::FTP;
+use POSIX       qw( strftime );
 use Time::Local qw( timegm );
 
 my $seen_file = $ENV{HOME} . '/.tweeted_changes';
@@ -367,33 +368,64 @@ sub parse_sets {
     $ftp->login( "anonymous", 'openbsd_sets@twitter' )
         or die "Cannot login ", $ftp->message;
 
-    my @sets;
-    for ( $ftp->dir('/pub/OpenBSD/*/{*/*base*.tgz,packages/*/index.txt}') ) {
-        my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $file ) = split;
-        my ( $release, $arch, $extra ) = ( split qr{/}, $file )[ 3, 4, 5 ];
+    my %sets;
+    for ( $ftp->dir('/pub/OpenBSD/*/{*/*base*.tgz,*/install*.*,packages/*/index.txt}') ) {
+        my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $path ) = split;
+        my ( $release, $arch, $file ) = ( split qr{/}, $path )[ 3, 4, 5 ];
 
         next if $arch eq 'tools';
 
-        my $type = 'sets';
         if ( $arch eq 'packages' ) {
-            $type = $arch;
-            $arch = $extra;
+            ($arch, $file) = ($file, $arch);
         }
-        elsif ($extra =~ /^xbase/){
-            $type = 'X-sets';
+        else {
+            $file =~ s/\d/X/g;
+            $file =~ s/\.\w+$//;
         }
 
         $release = 'snapshot' if $release eq 'snapshots';
+        $sets{$release}{$arch}{$file} = scalar to_epoch( $mon, $day, $yort );
+    }
 
-        my $id = "$type-$release-$arch-$mon-$day";
-        $id .= "-$yort" if $release eq 'snapshot'; # yort: YearOrTime
+    my @sets;
+    foreach my $release ( sort keys %sets ) {
+        my $format = $release eq 'snapshot' ? '%FT%H%M' : '%F';
 
-        push @sets, {
-            id      => $id,
-            type    => $type,
-            release => $release,
-            arch    => $arch,
-        };
+        foreach my $arch ( sort keys %{ $sets{$release} } ) {
+            my %set = %{ $sets{$release}{$arch} };
+            my $fmt = "$release-$arch-$format";
+
+            if ( my $epoch = $set{packages} ) {
+                push @sets, {
+                    id      => strftime( "packages-$fmt", gmtime $epoch ),
+                    type    => 'packages',
+                    release => $release,
+                    arch    => $arch,
+                };
+            }
+
+            if ( my $epoch = $set{baseXX} ) {
+
+                # To detect when a complete set is available, we make some
+                # guesses.  If there is an installXX, or xbaseXX, those should
+                # be newer than the baseXX because that means a full set has
+                # been built.  Some of the slower architectures seem to get
+                # base builds more frequently than X builds, but lowering the
+                # noise level is more important than accuracy.  Most folks
+                # interested in this probably care only about amd64 anyway.
+
+                my $complete
+                    = $set{installXX} || $set{xbaseXX} || $set{baseXX};
+                next if $complete < $epoch;
+
+                push @sets, {
+                    id      => strftime( "sets-$fmt", gmtime $epoch ),
+                    type    => 'sets',
+                    release => $release,
+                    arch    => $arch,
+                };
+            }
+        }
     }
 
     return @sets;
