@@ -23,6 +23,7 @@ use DB_File;
 use File::Basename;
 use Net::Twitter;
 use Net::FTP;
+use Time::Local qw( timegm );
 
 my $seen_file = $ENV{HOME} . '/.tweeted_changes';
 my $auth_file = $ENV{HOME} . '/.auth_tokens';
@@ -397,6 +398,37 @@ sub parse_sets {
 
     return @sets;
 }
+
+sub to_epoch {
+    my ($mon, $day, $yort) = @_;
+
+    state $months = {
+        Jan => 0, Feb => 1, Mar =>  2, Apr =>  3,
+        May => 4, Jun => 5, Jul =>  6, Aug =>  7,
+        Sep => 8, Oct => 9, Nov => 10, Dec => 11,
+    };
+
+    my $time  = '00:00';
+    my $month = $months->{$mon};
+    my $year  = $yort;
+
+    if ($yort =~ /:/) {
+        my ( $this_month, $this_day );
+        ($this_day, $this_month, $year) = (gmtime)[3,4,5];
+        $year += 1900;
+
+        $year--
+            if $this_month < $month
+            or $this_month == $month and $this_day < $day;
+
+        $time = $yort;
+    }
+
+    my ($hour, $min) = split /:/, $time;
+
+    return timegm( 0, $min, $hour, $day, $month, $year );
+}
+
 
 {
     my $X;
