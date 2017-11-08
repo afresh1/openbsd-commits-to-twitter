@@ -30,6 +30,8 @@ my $seen_file = $ENV{HOME} . '/.tweeted_changes';
 my $auth_file = $ENV{HOME} . '/.auth_tokens';
 my $mirror    = 'openbsd.cs.toronto.edu';
 
+my $default_maxlen = 280;
+
 my ($changelog) = @ARGV;
 die "Usage: $0 <path/to/ChangeLog>\n" unless $changelog;
 
@@ -194,7 +196,7 @@ sub make_tweet_for_sets {
 
 sub shorten {
     my ($message, $maxlen) = @_;
-    $maxlen ||= 140;
+    $maxlen ||= $default_maxlen;
     if ( length $message > $maxlen ) {
         my $keep = $maxlen - 3;
         $message =~ s/^(.{$keep}).*/$1/ms;
