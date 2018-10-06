@@ -9,3 +9,5 @@ You can follow these accounts:
  * [OpenBSD_ports](https://twitter.com/OpenBSD_ports): Commits to the ports module
  * [OpenBSD_www](https://twitter.com/OpenBSD_www): Commits to the www module
  * [OpenBSD_xenocar](https://twitter.com/OpenBSD_xenocar): Commits to the xenocara module
+ * [OpenBSD_stable](https://twitter.com/OpenBSD_stable): Commits to stable or oldstable branches
+ * [OpenBSD_sets](https://twitter.com/OpenBSD_sets) New base and packages sets
