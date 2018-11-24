@@ -53,7 +53,12 @@ foreach my $key ( sort keys %accounts ) {
 }
 
 my @commits = parse_changelog($changelog);
-my @sets = parse_sets($mirror);
+my @sets = do {
+	local $@;
+	my @s = eval { local $SIG{__DIE__}; parse_sets($mirror) };
+	warn $@ if $@;
+	@s;
+};
 foreach my $details (@commits, @sets) {
     check_message( $details );
 }
