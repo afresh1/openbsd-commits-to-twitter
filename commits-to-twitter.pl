@@ -229,7 +229,7 @@ sub tweet {
             return tweet( shorten($message, length($message) - 1), $params );
         }
         elsif ($@ =~ /Status is a duplicate/) {
-            warn "$@\n";
+            #warn "$@\n"; # could be useful, but mostly just annoys me with email
             return 1;
         }
 
