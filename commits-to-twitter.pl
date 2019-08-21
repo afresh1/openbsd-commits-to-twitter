@@ -28,7 +28,9 @@ use Time::Local qw( timegm );
 
 my $seen_file = $ENV{HOME} . '/.tweeted_changes';
 my $auth_file = $ENV{HOME} . '/.auth_tokens';
-my $mirror    = 'openbsd.cs.toronto.edu';
+#my $mirror    = 'openbsd.cs.toronto.edu';
+my $mirror    = 'ftp5.usa.openbsd.org';
+#my $mirror    = 'mirrors.sonic.net';
 
 my $default_maxlen = 280;
 
