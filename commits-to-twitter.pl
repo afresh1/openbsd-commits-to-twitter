@@ -34,9 +34,6 @@ my $mirror    = 'ftp5.usa.openbsd.org';
 
 my $default_maxlen = 280;
 
-my ($changelog) = @ARGV;
-die "Usage: $0 <path/to/ChangeLog>\n" unless $changelog;
-
 my %accounts = (
     cvs      => 'openbsd_cvs',
     src      => 'openbsd_src',
@@ -48,24 +45,30 @@ my %accounts = (
     sets    => 'openbsd_sets',
 );
 
-# Login to twitter
-foreach my $key ( sort keys %accounts ) {
-    my $account = $accounts{$key};
-    get_twitter_account($account);
-}
+do_it() unless caller;
+sub do_it {
+    my ($changelog) = @ARGV;
+    die "Usage: $0 <path/to/ChangeLog>\n" unless $changelog;
 
-my @commits = parse_changelog($changelog);
-my @sets = do {
-	local $@;
-	my @s = eval { local $SIG{__DIE__}; parse_sets($mirror) };
-	warn $@ if $@;
-	@s;
-};
-foreach my $details (@commits, @sets) {
-    check_message( $details );
+    # Login to twitter
+    foreach my $key ( sort keys %accounts ) {
+        my $account = $accounts{$key};
+        get_twitter_account($account);
+    }
+
+    my @commits = parse_changelog($changelog);
+    my @sets = do {
+	    local $@;
+	    my @s = eval { local $SIG{__DIE__}; parse_sets($mirror) };
+	    warn $@ if $@;
+	    @s;
+    };
+    foreach my $details (@commits, @sets) {
+        check_message( $details );
+    }
+    sleep 10;
+    retweet();
 }
-sleep 10;
-retweet();
 
 sub check_message {
     my ($details) = @_;
