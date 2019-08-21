@@ -1,4 +1,6 @@
 #!/bin/sh
+
 mkdir -p tmp
+#ftp -o ./tmp/ChangeLog http://ftp.usa.openbsd.org/pub/OpenBSD/Changelogs/ChangeLog
 rsync -a rsync://anoncvs.spacehopper.org/OpenBSD-CVS/CVSROOT/ChangeLog ./tmp
 `dirname $0`/commits-to-twitter.pl tmp/ChangeLog
