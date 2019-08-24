@@ -199,7 +199,16 @@ sub make_tweet_for_sets {
     my ($set) = @_;
     my %params = ( who => 'openbsd_sets' );
 
+    my $type = $set->{type} eq 'packages-stable' ? 'stable package' : $set->{type};
+
     my $message = "New OpenBSD $set->{release} $set->{type} for $set->{arch}";
+
+    if ($set->{type} eq 'syspatch' or $set->{type} eq 'packages-stable') {
+        $params{who} = 'openbsd_stable';
+        my $file = $set->{file};
+        $file =~ s/^syspatch\d+-//;
+        $message .= ": $file";
+    }
 
     return shorten($message), \%params;
 }
@@ -383,22 +392,36 @@ sub parse_sets {
         or die "Cannot login ", $ftp->message;
 
     my %sets;
-    for ( $ftp->dir('/pub/OpenBSD/*/{*/*base*.tgz,*/install*.*,packages/*/index.txt}') ) {
+    my @paths = (
+        '*/*base*.tgz',
+        '*/install*.*',
+        'packages/*/index.txt',
+        'packages-stable/*/*.tgz'
+    );
+
+    my @in_version = $ftp->dir('/pub/OpenBSD/*/{' . join(',', @paths) . '}');
+    my @syspatch   = $ftp->dir('/pub/OpenBSD/syspatch/*/*/*.tgz');
+
+    $ftp->quit;
+
+    for (@in_version, @syspatch) {
         my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $path ) = split;
-        my ( $release, $arch, $file ) = ( split qr{/}, $path )[ 3, 4, 5 ];
+        my ( $file, $arch, $release, $type ) = reverse split qr{/}, $path;
 
         next if $arch eq 'tools';
 
-        if ( $arch eq 'packages' ) {
-            ($arch, $file) = ($file, $arch);
+        if ( $release eq 'packages' or $release eq 'packages-stable' ) {
+            ( $release, $type ) = ( $type, $release );
         }
-        else {
+        elsif ( $type eq 'OpenBSD' ) {
+            $type = 'sets';
             $file =~ s/\d/X/g;
-            $file =~ s/\.\w+$//;
         }
 
+        $file =~ s/\.\w+$//;
+
         $release = 'snapshot' if $release eq 'snapshots';
-        $sets{$release}{$arch}{$file} = scalar to_epoch( $mon, $day, $yort );
+        $sets{$release}{$arch}{$type}{$file} = to_epoch( $mon, $day, $yort );
     }
 
     my @sets;
@@ -406,19 +429,29 @@ sub parse_sets {
         my $format = $release eq 'snapshot' ? '%FT%H%M' : '%F';
 
         foreach my $arch ( sort keys %{ $sets{$release} } ) {
-            my %set = %{ $sets{$release}{$arch} };
+            my %update = %{ $sets{$release}{$arch} };
             my $fmt = "$release-$arch-$format";
 
-            if ( my $epoch = $set{packages} ) {
-                push @sets, {
-                    id      => strftime( "packages-$fmt", gmtime $epoch ),
-                    type    => 'packages',
-                    release => $release,
-                    arch    => $arch,
-                };
+            foreach my $type ( sort keys %update ) {
+                next if $type eq 'sets'; # special handling later
+                foreach my $file ( sort keys %{ $update{$type} } ) {
+                    if ( my $epoch = $update{$type}{$file} ) {
+                        my $id = $type;
+                        $id .= "-$file" unless $type eq 'packages';
+                        push @sets, {
+                            id      => strftime( "$id-$fmt", gmtime $epoch ),
+                            epoch   => $epoch,
+                            type    => $type,
+                            release => $release,
+                            arch    => $arch,
+                            file    => $file,
+                        };
+                    }
+                }
             }
 
-            if ( my $epoch = $set{baseXX} ) {
+            if ( $update{sets} and my $epoch = $update{sets}{baseXX} ) {
+                my %set = %{ $update{sets} };
 
                 # To detect when a complete set is available, we make some
                 # guesses.  If there is an installXX, or xbaseXX, those should
@@ -434,6 +467,7 @@ sub parse_sets {
 
                 push @sets, {
                     id      => strftime( "sets-$fmt", gmtime $epoch ),
+                    epoch   => $epoch,
                     type    => 'sets',
                     release => $release,
                     arch    => $arch,
