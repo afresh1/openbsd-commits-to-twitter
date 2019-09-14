@@ -426,20 +426,22 @@ sub parse_sets {
 
     my @sets;
     foreach my $release ( sort keys %sets ) {
-        my $format = $release eq 'snapshot' ? '%FT%H%M' : '%F';
+        my $ts_fmt = $release eq 'snapshot' ? '%FT%H%M' : '%F';
 
         foreach my $arch ( sort keys %{ $sets{$release} } ) {
             my %update = %{ $sets{$release}{$arch} };
-            my $fmt = "$release-$arch-$format";
+            my $fmt = "$release-$arch";
 
             foreach my $type ( sort keys %update ) {
                 next if $type eq 'sets'; # special handling later
                 foreach my $file ( sort keys %{ $update{$type} } ) {
                     if ( my $epoch = $update{$type}{$file} ) {
-                        my $id = $type;
+                        my $id = "$type-$fmt";
                         $id .= "-$file" unless $type eq 'packages';
+                        $id .= strftime( "-$ts_fmt", gmtime $epoch )
+			    unless $type eq 'syspatch' or $type eq 'packages-stable';
                         push @sets, {
-                            id      => strftime( "$id-$fmt", gmtime $epoch ),
+                            id      => $id,
                             epoch   => $epoch,
                             type    => $type,
                             release => $release,
@@ -466,7 +468,7 @@ sub parse_sets {
                 next if $complete < $epoch;
 
                 push @sets, {
-                    id      => strftime( "sets-$fmt", gmtime $epoch ),
+                    id      => strftime( "sets-$fmt-$ts_fmt", gmtime $epoch ),
                     epoch   => $epoch,
                     type    => 'sets',
                     release => $release,
