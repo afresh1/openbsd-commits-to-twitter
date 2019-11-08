@@ -406,6 +406,12 @@ sub parse_sets {
 
     for (@in_version, @syspatch) {
         my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $path ) = split;
+
+        unless ($path) {
+            warn "No files in [$_]\n";
+            next;
+        }
+
         my ( $file, $arch, $release, $type ) = reverse split qr{/}, $path;
 
         next if $arch eq 'tools';
