@@ -399,7 +399,7 @@ sub parse_sets {
         'packages-stable/*/*.tgz'
     );
 
-    my @in_version = $ftp->dir('/pub/OpenBSD/*/{' . join(',', @paths) . '}');
+    my @in_version = map { $ftp->dir("/pub/OpenBSD/*/$_") } @paths;
     my @syspatch   = $ftp->dir('/pub/OpenBSD/syspatch/*/*/*.tgz');
 
     $ftp->quit;
