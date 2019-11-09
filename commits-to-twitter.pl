@@ -181,7 +181,11 @@ sub change_for {
 
 sub make_tweet {
     my ($commit) = @_;
-    return make_tweet_for_sets($commit) if $commit->{type};
+    if ( my $type = $commit->{type} ) {
+        return make_tweet_for_stable_package(@_)
+            if $type eq 'packages-stable';
+        return make_tweet_for_sets(@_);
+    }
 
     my %params = ( who => account_for( $commit->{'Module name'} ), );
 
@@ -204,7 +208,7 @@ sub make_tweet_for_sets {
 
     my $message = "New OpenBSD $set->{release} $set->{type} for $set->{arch}";
 
-    if ($set->{type} eq 'syspatch' or $set->{type} eq 'packages-stable') {
+    if ( $set->{type} eq 'syspatch' ) {
         $params{who} = 'openbsd_stable';
         my $file = $set->{file};
         $file =~ s/^syspatch\d+-//;
@@ -473,6 +477,7 @@ sub parse_sets {
     }
 
     my @sets;
+    my @stable_packages;
     foreach my $release ( sort keys %sets ) {
         my $ts_fmt = $release eq 'snapshot' ? '%FT%H%M' : '%F';
 
@@ -489,7 +494,7 @@ sub parse_sets {
                         $id .= strftime( "-$ts_fmt", gmtime $epoch )
                             unless $type eq 'syspatch'
                             or $type eq 'packages-stable';
-                        push @sets, {
+                        my $set = {
                             id      => $id,
                             epoch   => $epoch,
                             type    => $type,
@@ -497,6 +502,12 @@ sub parse_sets {
                             arch    => $arch,
                             file    => $file,
                         };
+                        if ( $type eq 'packages_stable' ) {
+                            push @stable_packages, $set;
+                        }
+                        else {
+                            push @sets, $set;
+                        }
                     }
                 }
             }
@@ -527,7 +538,7 @@ sub parse_sets {
         }
     }
 
-    return @sets;
+    return @sets, collase_stable_packages( @stable_packages );
 }
 
 sub collase_stable_packages {
