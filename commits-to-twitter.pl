@@ -632,3 +632,5 @@ sub get_twitter_account {
 
     return $nt;
 }
+
+1;
