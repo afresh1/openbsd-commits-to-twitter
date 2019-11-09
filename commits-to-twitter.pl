@@ -58,10 +58,10 @@ sub do_it {
 
     my @commits = parse_changelog($changelog);
     my @sets = do {
-	    local $@;
-	    my @s = eval { local $SIG{__DIE__}; parse_sets($mirror) };
-	    warn $@ if $@;
-	    @s;
+        local $@;
+        my @s = eval { local $SIG{__DIE__}; parse_sets($mirror) };
+        warn $@ if $@;
+        @s;
     };
     foreach my $details (@commits, @sets) {
         check_message( $details );
@@ -443,7 +443,8 @@ sub parse_sets {
                         my $id = "$type-$fmt";
                         $id .= "-$file" unless $type eq 'packages';
                         $id .= strftime( "-$ts_fmt", gmtime $epoch )
-			    unless $type eq 'syspatch' or $type eq 'packages-stable';
+                            unless $type eq 'syspatch'
+                            or $type eq 'packages-stable';
                         push @sets, {
                             id      => $id,
                             epoch   => $epoch,
