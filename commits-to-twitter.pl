@@ -214,6 +214,47 @@ sub make_tweet_for_sets {
     return shorten($message), \%params;
 }
 
+sub make_tweet_for_stable_package {
+    my ($set) = @_;
+    my %params = ( who => 'openbsd_stable' );
+
+    my $message = '';
+    my $package = 'package';
+
+    if ( my $packages = $set->{packages} ) {
+        if ( $set->{name} ) {
+            my $s = @{ $packages } == 1 ? '' : 's';
+            $message .= ": $set->{file} with subpackage$s ";
+        }
+        else {
+            $package = 'packages';
+            $message .= " version $set->{version} of ";
+        }
+        $message .= join ", ", @{$packages};
+    }
+    else {
+        $message .= ": $set->{file}";
+    }
+
+    if ( my $flavors = $set->{flavors} ) {
+        if ( $flavors->[0] eq '' ) {
+            shift @{ $flavors };
+            my $s = @{ $flavors } == 1 ? '' : 's';
+            $message .= " with additional flavor$s: ";
+        }
+        else {
+            my $s = @{ $flavors } == 1 ? '' : 's';
+            $message .= " with flavor$s: ";
+        }
+        $message .= join ", ", @{ $flavors };
+    }
+
+    $message
+        = "New OpenBSD $set->{release} $package for $set->{arch}$message";
+
+    return shorten($message), \%params;
+}
+
 sub shorten {
     my ($message, $maxlen) = @_;
     $maxlen ||= $default_maxlen;
