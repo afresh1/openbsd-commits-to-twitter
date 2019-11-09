@@ -202,7 +202,7 @@ sub make_tweet_for_sets {
     my ($set) = @_;
     my %params = ( who => 'openbsd_sets' );
 
-    my $message = "New $set->{release} $set->{type} for $set->{arch}";
+    my $message = "New OpenBSD $set->{release} $set->{type} for $set->{arch}";
 
     if ($set->{type} eq 'syspatch' or $set->{type} eq 'packages-stable') {
         $params{who} = 'openbsd_stable';
