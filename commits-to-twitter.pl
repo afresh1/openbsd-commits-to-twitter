@@ -82,14 +82,16 @@ sub check_message {
 
     if (!$seen->{ $details->{id} }) {
         if ( tweet( $message, $params ) ) {
-            $seen->{ $details->{id} } = time;
+            $seen->{$_} = time
+                for $details->{id}, @{ $details->{ids} || [] };
         }
     }
 
     if ($details->{Tag} && !$seen->{ 'stable_' . $details->{id} }) {
         $params->{who} = account_for( 'stable' );
         if ( tweet( $message, $params ) ) {
-            $seen->{ 'stable_' . $details->{id} } = time;
+            $seen->{ 'stable_' . $_ } = time
+                for $details->{id}, @{ $details->{ids} || [] };
         }
     }
 
