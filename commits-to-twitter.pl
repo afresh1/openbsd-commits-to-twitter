@@ -442,15 +442,18 @@ sub parse_sets {
         '*/*base*.tgz',
         '*/install*.*',
         'packages/*/index.txt',
-        'packages-stable/*/*.tgz'
     );
 
     my @in_version = map { $ftp->dir("/pub/OpenBSD/*/$_") } @paths;
     my @syspatch   = $ftp->dir('/pub/OpenBSD/syspatch/*/*/*.tgz');
+    my @packages_stable
+         = map { $ftp->dir($_) }
+           map { s{/SHA256\.sig$}{/*.tgz}r }
+           $ftp->ls('/pub/OpenBSD/*/packages-stable/*/SHA256.sig');
 
     $ftp->quit;
 
-    for (@in_version, @syspatch) {
+    for (@in_version, @syspatch, @packages_stable) {
         my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $path ) = split;
 
         unless ($path) {
