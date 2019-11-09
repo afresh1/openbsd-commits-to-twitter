@@ -437,14 +437,8 @@ sub parse_sets {
     $ftp->login( "anonymous", 'openbsd_sets@twitter' )
         or die "Cannot login ", $ftp->message;
 
-    my %sets;
-    my @paths = (
-        '*/*base*.tgz',
-        '*/install*.*',
-        'packages/*/index.txt',
-    );
-
-    my @in_version = map { $ftp->dir("/pub/OpenBSD/*/$_") } @paths;
+    my @in_version = map { $ftp->dir("/pub/OpenBSD/*/$_") }
+        ( '*/*base*.tgz', '*/install*.*', 'packages/*/index.txt', );
     my @syspatch   = $ftp->dir('/pub/OpenBSD/syspatch/*/*/*.tgz');
     my @packages_stable
          = map { $ftp->dir($_) }
@@ -453,6 +447,7 @@ sub parse_sets {
 
     $ftp->quit;
 
+    my %sets;
     for (@in_version, @syspatch, @packages_stable) {
         my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $path ) = split;
 
