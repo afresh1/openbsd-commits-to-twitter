@@ -23,6 +23,7 @@ use DB_File;
 use File::Basename;
 use Net::Twitter;
 use Net::FTP;
+use OpenBSD::PackageName;
 use POSIX       qw( strftime );
 use Time::Local qw( timegm );
 
@@ -486,6 +487,108 @@ sub parse_sets {
     }
 
     return @sets;
+}
+
+sub collase_stable_packages {
+
+    # Sort by length of the file name,
+    # this makes sure we find the "main" package before any flavors.
+    my @all = map { $_->[0] }
+        sort { $a->[1] <=> $b->[1] }
+        map  { [ $_, length $_->{file} ] } @_;
+
+    my $seen = seen();
+
+    my %by_package;
+    for (@all) {
+        if ( $seen->{ $_->{id} } ) {
+            $_->{remove} = 1;
+            next;
+        }
+
+        my ( $name, $version, @flavors )
+            = OpenBSD::PackageName::splitname( $_->{file} );
+
+        # Need to group by release, arch, and version
+        my $group = "$_->{release}/$_->{arch}-$version";
+
+        # Find the main entry for this particular rel and name
+        my $entry = $by_package{$group}{'---'}{$name} ||= $_;
+
+        if ( $_ eq $entry ) {
+            # We might need the version for display later
+            $entry->{version} = $version;
+        }
+        else {
+            # Remove things that are collapsing by flavor
+            $_->{remove} = 1;
+            push @{ $entry->{ids} }, $_->{id};
+        }
+
+        # Add this package's flavors to the list that are included
+        push @{ $entry->{flavors} }, join '-', @flavors;
+
+        # Now prepare to collapse by a subset of their parts.
+        my ( $base, @packages ) = split /-/, $name;
+        $by_package{$group}{$base}{$name} = $entry;
+        for (@packages) {
+            $base .= '-' . $_;
+            $by_package{$group}{$base}{$name} = $entry;
+        }
+    }
+
+    foreach my $group ( keys %by_package ) {
+
+        # We no longer need to lookup by name, so remove the table
+        delete $by_package{$group}{'---'};
+
+        # Try to collapse packages with a matching base into a single entry
+        foreach my $base ( keys %{ $by_package{$group} } ) {
+
+            # Now try to collapse any packages that share flavors
+            my %flavors;
+            foreach my $name ( keys %{ $by_package{$group}{$base} || {} } ) {
+                my $entry  = $by_package{$group}{$base}{$name};
+                my $flavor = join '/', @{ $entry->{flavors} || [''] };
+                $flavors{$flavor}{$name} = $entry;
+            }
+
+            # Only collapse packages that share flavors
+            foreach my $flavor ( keys %flavors ) {
+                my @packages = sort keys %{ $flavors{$flavor} };
+
+                # pre-sorted, so we just pick the first package as main
+                my $package = shift @packages;
+                my $entry   = $flavors{$flavor}{$package};
+
+                # No need to track if the only flavor was no flavor
+                delete $entry->{flavors} unless $flavor;
+
+                # No need to collapse a flavor with only a single package
+                next unless @packages;
+
+                # remove packages we're collapsing into this one
+                for (@packages) {
+                    $flavors{$flavor}{$_}{remove} = 1;
+                    push @{ $entry->{ids} }, $flavors{$flavor}{$_}{id};
+                }
+
+                # If the base matches, we can trim it off
+                # otherwise, it goes back in the list of multi-packages
+                if ( $package eq $base ) {
+                    $entry->{name} = $package;
+                    s/^\Q$package-// for @packages;
+                }
+                else {
+                    unshift @packages, $package;
+                }
+
+                $entry->{packages} = \@packages;
+            }
+        }
+    }
+
+    return grep { not $_->{remove} } @all;
 }
 
 sub to_epoch {
