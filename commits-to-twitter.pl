@@ -431,6 +431,9 @@ sub parse_log_message {
 sub parse_sets {
     my ($host) = @_;
 
+    # First gather up all the files on the ftp server
+    # do this and save the output so we're not holding open their connection.
+
     my $ftp = Net::FTP->new( $host, Debug => 0 )
         or die "Cannot connect to $host: $@";
 
@@ -447,96 +450,132 @@ sub parse_sets {
 
     $ftp->quit;
 
+    # Now we return those lines, converted into hashrefs
+    # we can use to make a tweet.
+    return parse_ftp_dir( @in_version, @syspatch ),
+        collase_stable_packages( parse_ftp_dir(@packages_stable) );
+}
+
+sub parse_ftp_dir {
+    my @non_sets;
     my %sets;
-    for (@in_version, @syspatch, @packages_stable) {
-        my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $path ) = split;
 
-        unless ($path) {
-            warn "No files in [$_]\n";
-            next;
+    # Now we parse each line into a hashref that has a "type"
+    foreach my $set ( map { parse_ftp_dir_line($_) } @_ ) {
+
+        # If it's a "sets" type, then we actually get a few different files
+        # from that set and are going to validate that the set is fully
+        # populated.
+        # We should probably do that for packages as well,
+        # but that's less of a problem and we'd have to work hard to
+        # figure out what files should be at the start and end of a sync.
+        if ($set->{type} eq 'sets') {
+            my $merge = $sets{"$set->{release}/$set->{arch}"} ||= $set;
+            $merge->{ delete $set->{file} } = delete $set->{epoch};
         }
-
-        my ( $file, $arch, $release, $type ) = reverse split qr{/}, $path;
-
-        next if $arch eq 'tools';
-
-        if ( $release eq 'packages' or $release eq 'packages-stable' ) {
-            ( $release, $type ) = ( $type, $release );
-        }
-        elsif ( $type eq 'OpenBSD' ) {
-            $type = 'sets';
-            $file =~ s/\d/X/g;
-        }
-
-        $file =~ s/\.\w+$//;
-
-        $release = 'snapshot' if $release eq 'snapshots';
-        $sets{$release}{$arch}{$type}{$file} = to_epoch( $mon, $day, $yort );
-    }
-
-    my @sets;
-    my @stable_packages;
-    foreach my $release ( sort keys %sets ) {
-        my $ts_fmt = $release eq 'snapshot' ? '%FT%H%M' : '%F';
-
-        foreach my $arch ( sort keys %{ $sets{$release} } ) {
-            my %update = %{ $sets{$release}{$arch} };
-            my $fmt = "$release-$arch";
-
-            foreach my $type ( sort keys %update ) {
-                next if $type eq 'sets'; # special handling later
-                foreach my $file ( sort keys %{ $update{$type} } ) {
-                    if ( my $epoch = $update{$type}{$file} ) {
-                        my $id = "$type-$fmt";
-                        $id .= "-$file" unless $type eq 'packages';
-                        $id .= strftime( "-$ts_fmt", gmtime $epoch )
-                            unless $type eq 'syspatch'
-                            or $type eq 'packages-stable';
-                        my $set = {
-                            id      => $id,
-                            epoch   => $epoch,
-                            type    => $type,
-                            release => $release,
-                            arch    => $arch,
-                            file    => $file,
-                        };
-                        if ( $type eq 'packages_stable' ) {
-                            push @stable_packages, $set;
-                        }
-                        else {
-                            push @sets, $set;
-                        }
-                    }
-                }
-            }
-
-            if ( $update{sets} and my $epoch = $update{sets}{baseXX} ) {
-                my %set = %{ $update{sets} };
-
-                # To detect when a complete set is available, we make some
-                # guesses.  If there is an installXX, or xbaseXX, those should
-                # be newer than the baseXX because that means a full set has
-                # been built.  Some of the slower architectures seem to get
-                # base builds more frequently than X builds, but lowering the
-                # noise level is more important than accuracy.  Most folks
-                # interested in this probably care only about amd64 anyway.
-
-                my $complete
-                    = $set{installXX} || $set{xbaseXX} || $set{baseXX};
-                next if $complete < $epoch;
-
-                push @sets, {
-                    id      => strftime( "sets-$fmt-$ts_fmt", gmtime $epoch ),
-                    epoch   => $epoch,
-                    type    => 'sets',
-                    release => $release,
-                    arch    => $arch,
-                };
-            }
+        else {
+            push @non_sets, $set;
         }
     }
 
-    return @sets, collase_stable_packages( @stable_packages );
+    # Now we return any sets we can find an "id" for
+    return grep { $_->{id} }
+        map { $_->{id} = id_for_set($_); $_ } ( @non_sets, values %sets );
+}
+
+sub parse_ftp_dir_line {
+    my ( $perm, $links, $u, $g, $size, $mon, $day, $yort, $path )
+        = split " ", $_[0];
+
+    # Complain if the server sent us back something we didn't understand
+    # that's usually that we got back the glob due to a timeout.
+    unless ($path) {
+        warn "No files in [$_[0]]\n";
+        return;
+    }
+
+    my ( $file, $arch, $release, $type ) = reverse split qr{/}, $path;
+
+    # We don't care about the "tools",
+    # but it's hard to build a glob that doesn't grab it.
+    return if $arch eq 'tools';
+
+    if ( $release eq 'packages' or $release eq 'packages-stable' ) {
+        # packages have the release and type reversed
+        ( $release, $type ) = ( $type, $release );
+    }
+    elsif ( $type eq 'OpenBSD' ) {
+
+        # If this is in the "OpenBSD" dir, then they're install sets
+        # but, they're verisioned and that makes working with them hard.
+        # So, replace the version with X.
+        $type = 'sets';
+        $file =~ s/\d/X/g;
+    }
+
+    # We don't have room for file extensions in the tweet!
+    $file =~ s/\.\w+$//;
+
+    $release = 'snapshot' if $release eq 'snapshots';
+
+    # Now we return the parsed out information in a useful hashref
+    return {
+        release => $release,
+        arch    => $arch,
+        type    => $type,
+        file    => $file,
+        epoch   => scalar to_epoch( $mon, $day, $yort ),
+    };
+}
+
+sub id_for_set {
+    my ($set) = @_;
+
+    # Here we're going to calculate a unique-id for this set
+    # We want it to be fairly unique, but not too touchy.
+    my $type   = $set->{type};
+
+    # For example, we want to know if a snapshot changes multile times a day
+    # but not for releases.
+    my $ts_fmt = $set->{release} eq 'snapshot' ? '%FT%H%M' : '%F';
+
+    # We do know some things that are going to uniquely identify this item
+    my @keys = qw< type release arch >;
+
+    # To detect when a complete set is available, we make some
+    # guesses.  If there is an installXX, or xbaseXX, those should
+    # be newer than the baseXX because that means a full set has
+    # been built.  Some of the slower architectures seem to get
+    # base builds more frequently than X builds, but lowering the
+    # noise level is more important than accuracy.  Most folks
+    # interested in this probably care only about amd64 anyway.
+    if ( $type eq 'sets' ) {
+        my $epoch    = $set->{baseXX}    || 0;
+        my $complete = $set->{installXX} || $set->{xbaseXX} || 0;
+
+        unless ( $epoch and $complete >= $epoch ) {
+            warn "Incomlete set for $set->{release} on $set->{arch}\n";
+            $set->{remove} = 1;
+            return;
+        }
+
+        $set->{epoch} = $epoch;
+    }
+    elsif ( $type eq 'syspatch' or $type eq 'packages-stable' ) {
+
+        # For stable packages and sysparches we don't care about timestamps
+        # as they all seem to change whenever a new one is released.
+        $ts_fmt = '';
+
+        # Instead, we end u unique by filename
+        push @keys, 'file';
+    }
+
+    # Now we actually build the ID,
+    my $id = join '-', map { $set->{$_} } @keys;
+    $id .= strftime( "-$ts_fmt", gmtime $set->{epoch} ) if $ts_fmt;
+
+    return $id;
 }
 
 sub collase_stable_packages {
