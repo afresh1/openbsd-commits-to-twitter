@@ -207,6 +207,7 @@ sub make_tweet_for_sets {
     my %params = ( who => 'openbsd_sets' );
 
     my $message = "New OpenBSD $set->{release} $set->{type} for $set->{arch}";
+    $message .= " including X" if $set->{xepoch};
 
     if ( $set->{type} eq 'syspatch' ) {
         $params{who} = 'openbsd_stable';
@@ -441,7 +442,8 @@ sub parse_sets {
         or die "Cannot login ", $ftp->message;
 
     my @in_version = map { $ftp->dir("/pub/OpenBSD/*/$_") }
-        ( '*/*base*.tgz', '*/install*.*', 'packages/*/index.txt', );
+        ( '*/*base*.tgz', '*/xshare*.tgz', '*/man*.tgz',
+          '*/miniroot*.fs', 'packages/*/index.txt' );
     my @syspatch   = $ftp->dir('/pub/OpenBSD/syspatch/*/*/*.tgz');
     my @packages_stable
          = map { $ftp->dir($_) }
@@ -550,13 +552,20 @@ sub id_for_set {
     # noise level is more important than accuracy.  Most folks
     # interested in this probably care only about amd64 anyway.
     if ( $type eq 'sets' ) {
-        my $epoch    = $set->{baseXX}    || 0;
-        my $complete = $set->{installXX} || $set->{xbaseXX} || 0;
+        my $epoch    = $set->{baseXX}     || 0;
+        my $complete = $set->{minirootXX} || $set->{manXX} || 0;
 
         unless ( $epoch and $complete >= $epoch ) {
             warn "Incomlete set for $set->{release} on $set->{arch}\n";
             $set->{remove} = 1;
             return;
+        }
+
+        if ( my $xepoch = $set->{xbaseXX} ) {
+            my $xcomplete = $set->{xshareXX} || 0;
+            if ( $xepoch > $epoch and $xepoch > $xcomplete ) {
+                $set->{xepoch} = $xepoch;
+            }
         }
 
         $set->{epoch} = $epoch;
