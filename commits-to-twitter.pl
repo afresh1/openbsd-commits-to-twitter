@@ -256,8 +256,10 @@ sub make_tweet_for_stable_package {
         $message .= join ", ", @{ $flavors };
     }
 
+    my $arch = join ", ", $set->{arch}, @{ $set->{archs} || [] };
+
     $message
-        = "New OpenBSD $set->{release} $package for $set->{arch}$message";
+        = "New OpenBSD $set->{release} $package for $arch$message";
 
     return shorten($message), \%params;
 }
@@ -667,6 +669,12 @@ sub collapse_stable_packages {
                 # No need to track if the only flavor was no flavor
                 delete $entry->{flavors} unless $flavor;
 
+                # We can group release, base, and version by matching flavors and subpackages
+                my $flavor_group = "$entry->{release}/$package-$entry->{version}";
+                my $flavor_base  = "$flavor-@packages";
+
+                $by_flavor{$flavor_group}{$flavor_base}{ $entry->{arch} } = $entry;
+
                 # No need to collapse a flavor with only a single package
                 next unless @packages;
 
@@ -688,6 +696,29 @@ sub collapse_stable_packages {
 
                 $entry->{packages} = \@packages;
             }
+        }
+    }
+
+    foreach my $group ( keys %by_flavor ) {
+
+        # Try to collapse architectures with a matching base into a single entry
+        foreach my $base ( keys %{ $by_flavor{$group} } ) {
+            my @archs = sort keys %{ $by_flavor{$group}{$base} || {} };
+
+            # Pick the first one to collase into.
+            # Since we sorted, and we'll put it first,
+            # that keeps the list ordered.
+            my $arch  = shift @archs;
+            my $entry = $by_flavor{$group}{$base}{$arch};
+
+            # No need to collapse a flavor with only a single arch
+            next unless @archs;
+
+            # remove entries we're collapsing into this one
+            $by_flavor{$group}{$base}{$_}{remove} = $entry->{id}
+                for @archs;
+
+            $entry->{archs} = \@archs;
         }
     }
 
