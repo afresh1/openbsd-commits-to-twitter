@@ -637,18 +637,21 @@ sub collapse_stable_packages {
         }
     }
 
+    my %by_flavor;
     foreach my $group ( keys %by_package ) {
 
         # We no longer need to lookup by name, so remove the table
         delete $by_package{$group}{'---'};
 
         # Try to collapse packages with a matching base into a single entry
-        foreach my $base ( keys %{ $by_package{$group} } ) {
+        foreach my $base ( sort keys %{ $by_package{$group} } ) {
 
             # Now try to collapse any packages that share flavors
             my %flavors;
             foreach my $name ( keys %{ $by_package{$group}{$base} || {} } ) {
                 my $entry  = $by_package{$group}{$base}{$name};
+                next if $entry->{remove}; # already collapsed somewhere
+
                 my $flavor = join '/', @{ $entry->{flavors} || [''] };
                 $flavors{$flavor}{$name} = $entry;
             }
