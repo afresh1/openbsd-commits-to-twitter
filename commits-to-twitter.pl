@@ -33,6 +33,8 @@ my $auth_file = $ENV{HOME} . '/.auth_tokens';
 my $mirror    = 'ftp5.usa.openbsd.org';
 #my $mirror    = 'mirrors.sonic.net';
 
+sub set_seen_file { $seen_file = $_[0] } # For debugging
+
 my $default_maxlen = 280;
 
 my %accounts = (
