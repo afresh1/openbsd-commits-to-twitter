@@ -556,7 +556,7 @@ sub id_for_set {
         my $complete = $set->{minirootXX} || $set->{manXX} || 0;
 
         unless ( $epoch and $complete >= $epoch ) {
-            warn "Incomlete set for $set->{release} on $set->{arch}\n";
+            warn "Incomplete set for $set->{arch}/$set->{release} ($epoch > $complete)\n";
             $set->{remove} = 1;
             return;
         }
