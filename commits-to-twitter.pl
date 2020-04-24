@@ -621,7 +621,7 @@ sub collapse_stable_packages {
         }
         else {
             # Remove things that are collapsing by flavor
-            $_->{remove} = 1;
+            $_->{remove} = $entry->{id};
             push @{ $entry->{ids} }, $_->{id};
         }
 
@@ -669,7 +669,7 @@ sub collapse_stable_packages {
 
                 # remove packages we're collapsing into this one
                 for (@packages) {
-                    $flavors{$flavor}{$_}{remove} = 1;
+                    $flavors{$flavor}{$_}{remove} = $entry->{id};
                     push @{ $entry->{ids} }, $flavors{$flavor}{$_}{id};
                 }
 
