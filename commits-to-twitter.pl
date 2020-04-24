@@ -455,7 +455,7 @@ sub parse_sets {
     # Now we return those lines, converted into hashrefs
     # we can use to make a tweet.
     return parse_ftp_dir( @in_version, @syspatch ),
-        collase_stable_packages( parse_ftp_dir(@packages_stable) );
+        collapse_stable_packages( parse_ftp_dir(@packages_stable) );
 }
 
 sub parse_ftp_dir {
@@ -587,7 +587,7 @@ sub id_for_set {
     return $id;
 }
 
-sub collase_stable_packages {
+sub collapse_stable_packages {
 
     # Sort by length of the file name,
     # this makes sure we find the "main" package before any flavors.
