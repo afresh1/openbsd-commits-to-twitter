@@ -715,8 +715,11 @@ sub collapse_stable_packages {
             next unless @archs;
 
             # remove entries we're collapsing into this one
-            $by_flavor{$group}{$base}{$_}{remove} = $entry->{id}
-                for @archs;
+            for (@archs) {
+                my $removed = $by_flavor{$group}{$base}{$_};
+                $removed->{remove} = $entry->{id};
+                push @{ $entry->{ids} }, $removed->{id};
+            }
 
             $entry->{archs} = \@archs;
         }
