@@ -289,7 +289,7 @@ sub tweet {
         # If we have what Twitter thinks is a URL, they are going to
         # "shorten" it.  That might make it longer, too long.
         # so, our best bet is to just keep chomping letters.
-        if ($@ =~ /tweet is too long|is over 140 characters|needs to be a bit shorter/) {
+        if ($@ =~ /tweet is too long|is over 280 characters|needs to be a bit shorter/) {
             $message =~ s/\.+$//; # strip the ellipse
             return tweet( shorten($message, length($message) - 1), $params );
         }
