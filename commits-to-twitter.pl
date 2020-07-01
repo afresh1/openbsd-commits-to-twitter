@@ -235,6 +235,8 @@ sub make_tweet_for_stable_package {
         }
         else {
             $package = 'packages';
+            $message .= " with debug symbols for"
+                if $set->{is_debug};
             $message .= " version $set->{version} of ";
         }
         $message .= join ", ", @{$packages};
@@ -255,6 +257,9 @@ sub make_tweet_for_stable_package {
         }
         $message .= join ", ", @{ $flavors };
     }
+
+    $message .= " and debug symbols"
+        if $set->{has_debug} and not $set->{is_debug};
 
     my $arch = join ", ", $set->{arch}, @{ $set->{archs} || [] };
 
@@ -601,7 +606,7 @@ sub collapse_stable_packages {
 
     my $seen = seen();
 
-    my %by_package;
+    my %by_name;
     for (@all) {
         if ( $seen->{ $_->{id} } ) {
             $_->{remove} = 1;
@@ -614,28 +619,45 @@ sub collapse_stable_packages {
         # Need to group by release, arch, and version
         my $group = "$_->{release}/$_->{arch}-$version";
 
+	# Group debug packages together
+        $_->{is_debug} = 1 if $name =~ s/^debug-//;
+
         # Find the main entry for this particular rel and name
-        my $entry = $by_package{$group}{'---'}{$name} ||= $_;
+        my $entry = $by_name{$group}{$name} ||= $_;
+
+        # If we found the debug entry first, swap with this entry
+        if ( $entry->{is_debug} and not $_->{is_debug} ) {
+            $by_name{$group}{$name} = $_;
+            ($entry, $_) = ($_, $entry);
+        }
+
+        $entry->{has_debug} = $_->{id} if $_->{is_debug};
 
         if ( $_ eq $entry ) {
             # We might need the version for display later
             $entry->{version} = $version;
         }
         else {
-            # Remove things that are collapsing by flavor
+            # Remove things that are collapsing by flavor or debug symbols
             $_->{remove} = $entry->{id};
             push @{ $entry->{ids} }, $_->{id};
         }
 
         # Add this package's flavors to the list that are included
         push @{ $entry->{flavors} }, join '-', @flavors;
+    }
 
-        # Now prepare to collapse by a subset of their parts.
-        my ( $base, @packages ) = split /-/, $name;
-        $by_package{$group}{$base}{$name} = $entry;
-        for (@packages) {
-            $base .= '-' . $_;
+    # Now prepare to collapse by a subset of their parts.
+    my %by_package;
+    foreach my $group ( keys %by_name ) {
+        foreach my $name ( keys %{ $by_name{$group} } ) {
+            my $entry = $by_name{$group}{$name};
+            my ( $base, @packages ) = split /-/, $name;
             $by_package{$group}{$base}{$name} = $entry;
+            for (@packages) {
+                $base .= '-' . $_;
+                $by_package{$group}{$base}{$name} = $entry;
+            }
         }
     }
 
