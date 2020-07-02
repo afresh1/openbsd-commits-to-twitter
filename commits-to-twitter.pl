@@ -617,7 +617,7 @@ sub collapse_stable_packages {
             = OpenBSD::PackageName::splitname( $_->{file} );
 
         # Need to group by release, arch, and version
-        my $group = "$_->{release}/$_->{arch}-$version";
+        my $group = join $;, $_->{release}, $_->{arch}, $version;
 
 	# Group debug packages together
         $_->{is_debug} = 1 if $name =~ s/^debug-//;
@@ -633,6 +633,7 @@ sub collapse_stable_packages {
 
         $entry->{has_debug} = $_->{id} if $_->{is_debug};
 
+        my $skip_flavors = 0;
         if ( $_ eq $entry ) {
             # We might need the version for display later
             $entry->{version} = $version;
@@ -641,46 +642,47 @@ sub collapse_stable_packages {
             # Remove things that are collapsing by flavor or debug symbols
             $_->{remove} = $entry->{id};
             push @{ $entry->{ids} }, $_->{id};
+
+            # Don't add the debug package's flavors
+            # if we got a debug package that isn't the only package.
+            $skip_flavors = $_->{is_debug};
         }
 
         # Add this package's flavors to the list that are included
-        push @{ $entry->{flavors} }, join '-', @flavors;
+        push @{ $entry->{flavors} }, join '-', @flavors
+            unless $skip_flavors;
     }
 
     # Now prepare to collapse by a subset of their parts.
-    my %by_package;
+    my %by_arch;
     foreach my $group ( keys %by_name ) {
+
+        # Prepare all possible base packages with subpackages
+        # we're going to find the shortest base that has multiple names.
+        my %by_package;
         foreach my $name ( keys %{ $by_name{$group} } ) {
             my $entry = $by_name{$group}{$name};
             my ( $base, @packages ) = split /-/, $name;
-            $by_package{$group}{$base}{$name} = $entry;
+            $by_package{$base}{$name} = $entry;
             for (@packages) {
                 $base .= '-' . $_;
-                $by_package{$group}{$base}{$name} = $entry;
+                $by_package{$base}{$name} = $entry;
             }
         }
-    }
-
-    my %by_flavor;
-    foreach my $group ( keys %by_package ) {
-
-        # We no longer need to lookup by name, so remove the table
-        delete $by_package{$group}{'---'};
 
         # Try to collapse packages with a matching base into a single entry
-        foreach my $base ( sort keys %{ $by_package{$group} } ) {
+        foreach my $base ( sort keys %by_package ) {
 
-            # Now try to collapse any packages that share flavors
             my %flavors;
-            foreach my $name ( keys %{ $by_package{$group}{$base} || {} } ) {
-                my $entry  = $by_package{$group}{$base}{$name};
+            foreach my $name ( keys %{ $by_package{$base} || {} } ) {
+                my $entry  = $by_package{$base}{$name};
                 next if $entry->{remove}; # already collapsed somewhere
 
-                my $flavor = join '/', @{ $entry->{flavors} || [''] };
+                my $flavor = join $;, @{ $entry->{flavors} || [''] };
                 $flavors{$flavor}{$name} = $entry;
             }
 
-            # Only collapse packages that share flavors
+            # Collapse packages that share flavors
             foreach my $flavor ( keys %flavors ) {
                 my @packages = sort keys %{ $flavors{$flavor} };
 
@@ -688,14 +690,13 @@ sub collapse_stable_packages {
                 my $package = shift @packages;
                 my $entry   = $flavors{$flavor}{$package};
 
+                # We can group release, base, and version by matching flavors and subpackages
+                my $arch_group = join $;, $entry->{release}, $base, $entry->{version};
+                my $arch_base  = join $;, "[$flavor]", $package, @packages;
+                $by_arch{$arch_group}{$arch_base}{ $entry->{arch} } = $entry;
+
                 # No need to track if the only flavor was no flavor
                 delete $entry->{flavors} unless $flavor;
-
-                # We can group release, base, and version by matching flavors and subpackages
-                my $flavor_group = "$entry->{release}/$package-$entry->{version}";
-                my $flavor_base  = "$flavor-@packages";
-
-                $by_flavor{$flavor_group}{$flavor_base}{ $entry->{arch} } = $entry;
 
                 # No need to collapse a flavor with only a single package
                 next unless @packages;
@@ -721,24 +722,24 @@ sub collapse_stable_packages {
         }
     }
 
-    foreach my $group ( keys %by_flavor ) {
+    foreach my $group ( keys %by_arch ) {
 
         # Try to collapse architectures with a matching base into a single entry
-        foreach my $base ( keys %{ $by_flavor{$group} } ) {
-            my @archs = sort keys %{ $by_flavor{$group}{$base} || {} };
+        foreach my $base ( keys %{ $by_arch{$group} } ) {
+            my @archs = sort keys %{ $by_arch{$group}{$base} || {} };
 
             # Pick the first one to collase into.
             # Since we sorted, and we'll put it first,
             # that keeps the list ordered.
             my $arch  = shift @archs;
-            my $entry = $by_flavor{$group}{$base}{$arch};
+            my $entry = $by_arch{$group}{$base}{$arch};
 
             # No need to collapse a flavor with only a single arch
             next unless @archs;
 
             # remove entries we're collapsing into this one
             for (@archs) {
-                my $removed = $by_flavor{$group}{$base}{$_};
+                my $removed = $by_arch{$group}{$base}{$_};
                 $removed->{remove} = $entry->{id};
                 push @{ $entry->{ids} }, $removed->{id};
             }
