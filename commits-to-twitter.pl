@@ -703,8 +703,9 @@ sub collapse_stable_packages {
 
                 # remove packages we're collapsing into this one
                 for (@packages) {
-                    $flavors{$flavor}{$_}{remove} = $entry->{id};
-                    push @{ $entry->{ids} }, $flavors{$flavor}{$_}{id};
+                    my $removed = $flavors{$flavor}{$_};
+                    $removed->{remove} = $entry->{id};
+                    push @{ $entry->{ids} }, $removed->{id};
                 }
 
                 # If the base matches, we can trim it off
