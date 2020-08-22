@@ -633,12 +633,11 @@ sub collapse_stable_packages {
 
         $entry->{has_debug} = $_->{id} if $_->{is_debug};
 
+        # We might need the version for display later
+        $entry->{version} = $version;
+
         my $skip_flavors = 0;
-        if ( $_ eq $entry ) {
-            # We might need the version for display later
-            $entry->{version} = $version;
-        }
-        else {
+        if ( $_ ne $entry ) {
             # Remove things that are collapsing by flavor or debug symbols
             $_->{remove} = $entry->{id};
             push @{ $entry->{ids} }, $_->{id};
